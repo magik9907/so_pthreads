@@ -13,18 +13,17 @@ extern struct Node
 {
     int id;
     pthread_t thread;
-    pthread_mutex_t mutex;
+    // pthread_mutex_t mutex;
     struct Node *next;
 };
 typedef struct Node QueueElem;
 
 QueueElem *Clients;
 QueueElem *ClientsTop;
-
+pthread_mutex_t waitingRoom;
+pthread_mutex_t barberSleep;
 sem_t barberBusySemaphore;
 sem_t clientCountSemaphore;
-pthread_mutex_t barberSeat;
-pthread_mutex_t barberSleep;
 pthread_t *clients;
 pthread_t barber;
 //liczba miejsc w po+czekalni
@@ -43,14 +42,20 @@ void removeClient(QueueElem *client)
     char *str = (char *)malloc(sizeof(char) * 100);
     sprintf(str, "client try remove %d \n", client->id);
     write(1, str, strlen(str));
+    pthread_mutex_trylock(&waitingRoom);
     QueueElem *curr = Clients;
 
     if (curr->id == client->id)
     {
         if (curr->next != NULL)
+        {
             Clients = curr->next;
+        }
         else
+        {
+            ClientsTop = NULL;
             Clients = NULL;
+        }
     }
     else
     {
@@ -60,6 +65,7 @@ void removeClient(QueueElem *client)
         }
         curr->next = NULL;
     }
+    pthread_mutex_unlock(&waitingRoom);
     sprintf(str, "client end remove %d \n", client->id);
     write(1, str, strlen(str));
     free(str);
@@ -69,8 +75,8 @@ void removeClient(QueueElem *client)
 void *barberFunc()
 {
     char *str = (char *)malloc(sizeof(char) * 100);
-    write(1, "barber run\n", 11);
-    write(1, "barber lock\n", 12);
+    // write(1, "barber run\n", 11);
+    // write(1, "barber lock\n", 12);
     // pthread_mutex_unlock(&barberSleep);
     // write(1, "barber unlock\n", 14);
     int val, time;
@@ -84,18 +90,19 @@ void *barberFunc()
             sprintf(str, "wait for client \n");
             write(1, str, strlen(str));
 
+            pthread_mutex_trylock(&barberSleep);
             sem_init(&barberBusySemaphore, 0, 1);
             val = 1;
             do
             {
                 sem_getvalue(&barberBusySemaphore, &val);
-            } while (val == 1);
+            } while (val == 1 || Clients == NULL);
             sprintf(str, "barber wakeup client found \n");
             write(1, str, strlen(str));
         }
         else
         {
-            sprintf(str, "sleep barber shear %d\n", client->id);
+            sprintf(str, "sleep barber shear %d %d\n ", client->id, ClientsTop->id);
             write(1, str, strlen(str));
             time = 1000000 + rand() % (maxShearTime + 1 - 1000000);
             usleep(time);
@@ -129,9 +136,16 @@ void *clientFunc(void *arg)
         free(str);
         pthread_exit(NULL);
     }
-    else if (pthread_mutex_trylock(&barberSeat) == 0)
+    else if (semaphoreValue == 0)
     {
-        sprintf(str, "client run %d wakeup barber \n", client->id);
+        pthread_mutex_unlock(&barberSleep);
+        sem_init(&barberBusySemaphore, 0, 0);
+        int a;
+        if (Clients == NULL)
+            a = -1;
+        else
+            a = Clients->id;
+        sprintf(str, "client run %d wakeup barber, First ELement %d\n", client->id, a);
         write(1, str, strlen(str));
     }
     else
@@ -141,23 +155,33 @@ void *clientFunc(void *arg)
         write(1, str, strlen(str));
     }
     free(str);
+    pthread_exit(NULL);
 }
 
 void addClient(int id)
 {
+    char *str = (char *)malloc(sizeof(char) * 100);
+    pthread_mutex_trylock(&waitingRoom);
     QueueElem *newClient = (QueueElem *)malloc(sizeof(QueueElem));
     newClient->id = id;
-    pthread_mutex_init(&(newClient->mutex), NULL);
+    sprintf(str, "newclient run %d  \n", newClient->id);
+    write(1, str, strlen(str));
+    // pthread_mutex_init(&(newClient->mutex), NULL);
     if (ClientsTop == NULL)
-        ClientsTop = newClient;
-    else
-        ClientsTop->next = newClient;
-    if (Clients == NULL)
+    {
         Clients = newClient;
+    }
+    else
+    {
+        ClientsTop->next = newClient;
+    }
+    ClientsTop = newClient;
     if (pthread_create(&(newClient->thread), NULL, &clientFunc, (void *)newClient) != 0)
     {
         write(1, "create Thread client error\n", 31);
     }
+    pthread_mutex_unlock(&waitingRoom);
+    free(str);
 }
 
 int main(int argc, char *argv[])
@@ -190,8 +214,9 @@ int main(int argc, char *argv[])
     clients = (pthread_t *)malloc(sizeof(pthread_t) * clientQueue);
     sem_init(&barberBusySemaphore, 0, 0);
     sem_init(&clientCountSemaphore, 0, 0);
+    pthread_mutex_init(&waitingRoom, NULL);
     pthread_mutex_init(&barberSleep, NULL);
-    pthread_mutex_init(&barberSeat, NULL);
+    // pthread_mutex_init(&barberSeat, NULL);
 
     if (pthread_create(&barber, NULL, &barberFunc, NULL) != 0)
     {
