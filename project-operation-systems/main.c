@@ -9,7 +9,7 @@
 #include <string.h>
 #include <time.h>
 
-extern struct Node
+struct Node
 {
     int id;
     pthread_t thread;
@@ -21,17 +21,22 @@ typedef struct Node QueueElem;
 QueueElem *Clients;
 QueueElem *ClientsTop;
 pthread_mutex_t waitingRoom;
-pthread_mutex_t barberSleep;
+pthread_mutex_t barberSeat;
 sem_t barberBusySemaphore;
 sem_t clientCountSemaphore;
+sem_t waitingClientSemaphore;
+sem_t resignedClientsSemaphore;
 pthread_t *clients;
 pthread_t barber;
+
+int CLIENTCOUNT = 0;
+int RESIGNEDCOUNT = 0;
 //liczba miejsc w po+czekalni
 int clientQueue = 10;
 //liczba klientów
 int clientCount = 100;
 //czas strzyzenia
-int maxShearTime = 1000000;
+int maxShearTime = 9000000;
 //czas przeybycia klientóœ
 int maxClientArriveTime = 1 * 1000000;
 //tryb debugowania
@@ -40,10 +45,10 @@ int isDebug = 0;
 void removeClient(QueueElem *client)
 {
     char *str = (char *)malloc(sizeof(char) * 100);
-    sprintf(str, "client try remove %d \n", client->id);
-    write(1, str, strlen(str));
-    pthread_mutex_trylock(&waitingRoom);
+    // sprintf(str, "client try remove %d \n", client->id);
+    // write(1, str, strlen(str));
     QueueElem *curr = Clients;
+    pthread_mutex_lock(&waitingRoom);
 
     if (curr->id == client->id)
     {
@@ -65,122 +70,89 @@ void removeClient(QueueElem *client)
         }
         curr->next = NULL;
     }
+    CLIENTCOUNT--;
     pthread_mutex_unlock(&waitingRoom);
-    sprintf(str, "client end remove %d \n", client->id);
-    write(1, str, strlen(str));
     free(str);
     free(client);
 }
 
 void *barberFunc()
 {
+    int i;
     char *str = (char *)malloc(sizeof(char) * 100);
-    // write(1, "barber run\n", 11);
-    // write(1, "barber lock\n", 12);
-    // pthread_mutex_unlock(&barberSleep);
-    // write(1, "barber unlock\n", 14);
-    int val, time;
-    QueueElem *client;
-    int semaphoreValue;
-    while (1)
+    long long times;
+    while (1 == 1)
     {
-        client = Clients;
-        if (client == NULL)
-        {
-            sprintf(str, "wait for client \n");
-            write(1, str, strlen(str));
+        sem_wait(&waitingClientSemaphore);
+        sem_getvalue(&waitingClientSemaphore, &i);
+        times = 100000 + (rand() / ((maxShearTime + 1)) * 10000);
+        usleep(times);
 
-            pthread_mutex_trylock(&barberSleep);
-            sem_init(&barberBusySemaphore, 0, 1);
-            val = 1;
-            do
-            {
-                sem_getvalue(&barberBusySemaphore, &val);
-            } while (val == 1 || Clients == NULL);
-            sprintf(str, "barber wakeup client found \n");
-            write(1, str, strlen(str));
-        }
-        else
-        {
-            sprintf(str, "sleep barber shear %d %d\n ", client->id, ClientsTop->id);
-            write(1, str, strlen(str));
-            time = 1000000 + rand() % (maxShearTime + 1 - 1000000);
-            usleep(time);
-            sprintf(str, "remove client from seat %d\n", client->id);
-            write(1, str, strlen(str));
-            removeClient(client);
-            sem_getvalue(&clientCountSemaphore, &semaphoreValue);
-            sem_init(&clientCountSemaphore, 0, semaphoreValue - 1);
-            sprintf(str, "decrement clinet in queue \n", client->id);
-            write(1, str, strlen(str));
-        }
-        client = NULL;
+        sprintf(str, "\nclient run %lld queue insert ", times);
+        write(1, str, strlen(str));
+        removeClient(Clients);
     }
-
     free(str);
     pthread_exit(NULL);
 }
 
 void *clientFunc(void *arg)
 {
-    QueueElem *client = (QueueElem *)malloc(sizeof(QueueElem));
-    client = (QueueElem *)arg;
+    QueueElem *curr = (QueueElem *)arg;
+
+    pthread_mutex_lock(&waitingRoom);
+
     char *str = (char *)malloc(sizeof(char) * 100);
-    int semaphoreValue;
-    sem_getvalue(&clientCountSemaphore, &semaphoreValue);
-    if (semaphoreValue >= 10)
-    {
-        sprintf(str, "queue full, client exit %d\n", client->id);
-        write(1, str, strlen(str));
-        removeClient(client);
-        free(str);
-        pthread_exit(NULL);
-    }
-    else if (semaphoreValue == 0)
-    {
-        pthread_mutex_unlock(&barberSleep);
-        sem_init(&barberBusySemaphore, 0, 0);
-        int a;
-        if (Clients == NULL)
-            a = -1;
-        else
-            a = Clients->id;
-        sprintf(str, "client run %d wakeup barber, First ELement %d\n", client->id, a);
-        write(1, str, strlen(str));
-    }
-    else
-    {
-        sem_init(&clientCountSemaphore, 0, semaphoreValue + 1);
-        sprintf(str, "client run %d queue insert \n", client->id);
-        write(1, str, strlen(str));
-    }
+    // sprintf(str, "add newClient %d\n", curr->id);
+    // write(1, str, strlen(str));
+    // int i;
+    sem_post(&waitingClientSemaphore);
+    CLIENTCOUNT++;
+    sprintf(str, "\nRes:%d WRomm: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, Clients->id);
+    write(1, str, strlen(str));
+    pthread_mutex_unlock(&waitingRoom);
     free(str);
+
     pthread_exit(NULL);
 }
 
 void addClient(int id)
 {
     char *str = (char *)malloc(sizeof(char) * 100);
-    pthread_mutex_trylock(&waitingRoom);
     QueueElem *newClient = (QueueElem *)malloc(sizeof(QueueElem));
     newClient->id = id;
+    newClient->next = NULL;
     sprintf(str, "newclient run %d  \n", newClient->id);
     write(1, str, strlen(str));
     // pthread_mutex_init(&(newClient->mutex), NULL);
-    if (ClientsTop == NULL)
+
+    if (CLIENTCOUNT >= 10)
     {
-        Clients = newClient;
+        RESIGNEDCOUNT++;
+        sprintf(str, "\nRes:%d WRomm: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, (Clients != NULL) ? Clients->id : 0);
+        write(1, str, strlen(str));
+        // write(1, "create Thread client error\n", 31);
+        // sem_post(&resignedClientsSemaphore);
     }
     else
     {
-        ClientsTop->next = newClient;
+        write(1, str, strlen(str));
+        pthread_mutex_lock(&waitingRoom);
+        if (ClientsTop == NULL)
+        {
+            Clients = newClient;
+        }
+        else
+        {
+            ClientsTop->next = newClient;
+        }
+        ClientsTop = newClient;
+        pthread_mutex_unlock(&waitingRoom);
+        if (pthread_create(&(newClient->thread), NULL, &clientFunc, (void *)newClient) != 0)
+        {
+            write(1, "create Thread client error\n", 31);
+        }
     }
-    ClientsTop = newClient;
-    if (pthread_create(&(newClient->thread), NULL, &clientFunc, (void *)newClient) != 0)
-    {
-        write(1, "create Thread client error\n", 31);
-    }
-    pthread_mutex_unlock(&waitingRoom);
     free(str);
 }
 
@@ -214,8 +186,10 @@ int main(int argc, char *argv[])
     clients = (pthread_t *)malloc(sizeof(pthread_t) * clientQueue);
     sem_init(&barberBusySemaphore, 0, 0);
     sem_init(&clientCountSemaphore, 0, 0);
+    sem_init(&waitingClientSemaphore, 0, 0);
+    sem_init(&resignedClientsSemaphore, 0, 0);
     pthread_mutex_init(&waitingRoom, NULL);
-    pthread_mutex_init(&barberSleep, NULL);
+    pthread_mutex_init(&barberSeat, NULL);
     // pthread_mutex_init(&barberSeat, NULL);
 
     if (pthread_create(&barber, NULL, &barberFunc, NULL) != 0)
@@ -223,13 +197,15 @@ int main(int argc, char *argv[])
         write(1, "create Thread barber error\n", 31);
         return -1;
     }
+    char *str = (char *)malloc(sizeof(char) * 100);
+
     int i = 0;
     int counter;
-    int times;
-    int minClientTimeArrive = 1000000;
+    long long times;
+    int minClientTimeArrive = 100;
     for (i = 0; i < clientCount; i++)
     {
-        times = minClientTimeArrive + rand() % (maxClientArriveTime + 1 - minClientTimeArrive);
+        times = minClientTimeArrive + (rand() / ((maxClientArriveTime + 1)) * 1000);
         usleep(times);
         addClient(i);
     }
@@ -240,3 +216,7 @@ int main(int argc, char *argv[])
     free(clients);
     return 0;
 }
+// char *str = (char *)malloc(sizeof(char) * 100);
+// sprintf(str, "client run %d queue insert \n", client->id);
+// write(1, str, strlen(str));
+// free(str);
