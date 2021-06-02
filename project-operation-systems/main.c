@@ -42,6 +42,8 @@ int maxClientArriveTime = 1 * 1000000;
 //tryb debugowania
 int isDebug = 0;
 
+int allClients = 0;
+
 void removeClient(QueueElem *client)
 {
     char *str = (char *)malloc(sizeof(char) * 100);
@@ -81,7 +83,7 @@ void *barberFunc()
     int i;
     char *str = (char *)malloc(sizeof(char) * 100);
     long long times;
-    while (1 == 1)
+    while (!allClients || Clients != NULL)
     {
         sem_wait(&waitingClientSemaphore);
         sem_getvalue(&waitingClientSemaphore, &i);
@@ -112,7 +114,6 @@ void *clientFunc(void *arg)
     write(1, str, strlen(str));
     pthread_mutex_unlock(&waitingRoom);
     free(str);
-
     pthread_exit(NULL);
 }
 
@@ -209,7 +210,7 @@ int main(int argc, char *argv[])
         usleep(times);
         addClient(i);
     }
-
+    allClients = 1;
     pthread_join(barber, NULL);
     sem_destroy(&barberBusySemaphore);
     sem_destroy(&clientCountSemaphore);
