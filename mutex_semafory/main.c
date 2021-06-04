@@ -17,6 +17,8 @@ struct Node
 };
 typedef struct Node QueueElem;
 
+QueueElem *Resigned = NULL;
+QueueElem *ResignedTop = NULL;
 QueueElem *Clients;
 QueueElem *ClientsTop;
 pthread_mutex_t waitingRoom;
@@ -42,6 +44,28 @@ int maxClientArriveTime = 1 * 1000000;
 int isDebug = 0;
 
 int allClients = 0;
+
+void printDebug()
+{
+      char *str = (char *)malloc(sizeof(char) * 300);
+    strcpy(str, "Clients: ");
+    QueueElem *elem = Clients;
+    while (elem != NULL)
+    {
+        sprintf(str, "%s -> %d", str, elem->id);
+        elem = elem->next;
+    }
+
+    strcat(str, " Resigned clients: ");
+    elem = Resigned;
+    while (elem != NULL)
+    {
+        sprintf(str, "%s -> %d", str, elem->id);
+        elem = elem->next;
+    }
+    write(1, str, strlen(str));
+    free(str);
+}
 
 void removeClient(QueueElem *client)
 {
@@ -109,8 +133,12 @@ void *clientFunc(void *arg)
     // int i;
     sem_post(&waitingClientSemaphore);
     CLIENTCOUNT++;
-    sprintf(str, "\nCLinetRes:%d WRomm: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, Clients->id);
+    sprintf(str, "\nRes:%d WRomm: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, Clients->id);
     write(1, str, strlen(str));
+    if (isDebug == 1)
+    {
+        printDebug();
+    }
     pthread_mutex_unlock(&waitingRoom);
     free(str);
     pthread_exit(NULL);
@@ -128,10 +156,20 @@ void addClient(int id)
 
     if (CLIENTCOUNT >= 10)
     {
+        if (Resigned == NULL)
+            Resigned = newClient;
+        else
+        {
+            ResignedTop->next = newClient;
+        }
+        ResignedTop = newClient;
         RESIGNEDCOUNT++;
         sprintf(str, "\nRes:%d WRomm: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, (Clients != NULL) ? Clients->id : 0);
         write(1, str, strlen(str));
-        // write(1, "create Thread client error\n", 31);
+        if (isDebug == 1)
+        {
+            printDebug();
+        } // write(1, "create Thread client error\n", 31);
         // sem_post(&resignedClientsSemaphore);
     }
     else
@@ -160,7 +198,7 @@ int main(int argc, char *argv[])
 {
     srand(time(NULL));
     int option;
-    while ((option = getopt(argc, argv, "q:s:c:t:d") != -1))
+    while ((option = getopt(argc, argv, "q:s:c:t:d")) != -1)
     {
         switch (option)
         {
