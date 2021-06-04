@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
-#include "function.h"
 #include <pthread.h>
 #include <getopt.h>
 #include <semaphore.h>
@@ -90,8 +89,8 @@ void *barberFunc()
         times = 100000 + (rand() / ((maxShearTime + 1)) * 10000);
         usleep(times);
 
-        sprintf(str, "\nclient run %lld queue insert ", times);
-        write(1, str, strlen(str));
+        // sprintf(str, "\nclient run %lld queue insert ", Clients->id);
+        // write(1, str, strlen(str));
         removeClient(Clients);
     }
     free(str);
@@ -110,7 +109,7 @@ void *clientFunc(void *arg)
     // int i;
     sem_post(&waitingClientSemaphore);
     CLIENTCOUNT++;
-    sprintf(str, "\nRes:%d WRomm: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, Clients->id);
+    sprintf(str, "\nCLinetRes:%d WRomm: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, Clients->id);
     write(1, str, strlen(str));
     pthread_mutex_unlock(&waitingRoom);
     free(str);
@@ -123,8 +122,8 @@ void addClient(int id)
     QueueElem *newClient = (QueueElem *)malloc(sizeof(QueueElem));
     newClient->id = id;
     newClient->next = NULL;
-    sprintf(str, "newclient run %d  \n", newClient->id);
-    write(1, str, strlen(str));
+    // sprintf(str, "newclient run %d  \n", newClient->id);
+    // write(1, str, strlen(str));
     // pthread_mutex_init(&(newClient->mutex), NULL);
 
     if (CLIENTCOUNT >= 10)
