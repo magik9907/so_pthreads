@@ -95,7 +95,7 @@ QueueElem *removeClient(QueueElem *client)
     }
     CLIENTCOUNT--;
     currentClientID = client->id;
-    sprintf(str, "\nRes:%d WRomm: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, currentClientID);
+    sprintf(str, "\nRes:%d WRoom: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, currentClientID);
     write(1, str, strlen(str));
     if(isDebug)
 	printDebug();
@@ -122,6 +122,7 @@ void *barberFunc()
         times = 100000 + (rand() / ((maxShearTime + 1)) * 10000);
         usleep(times);
 	free(currentClient);
+	currentClientID = -1;
         // sprintf(str, "\nclient run %lld queue insert ", Clients->id);
         // write(1, str, strlen(str));
         pthread_mutex_unlock(&BarberMutex);
@@ -140,7 +141,7 @@ void *clientFunc(void *arg)
     // write(1, str, strlen(str));
     // int i;
     CLIENTCOUNT++;
-    sprintf(str, "\nRes:%d WRomm: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, currentClientID);
+    sprintf(str, "\nRes:%d WRoom: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, currentClientID);
     write(1, str, strlen(str));
     if (isDebug == 1)
     {
@@ -176,7 +177,7 @@ void addClient(int id)
         }
         ResignedTop = newClient;
         RESIGNEDCOUNT++;
-        sprintf(str, "\nRes:%d WRomm: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, currentClientID);
+        sprintf(str, "\nRes:%d WRoom: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, currentClientID);
         write(1, str, strlen(str));
         if (isDebug == 1)
         {
