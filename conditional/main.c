@@ -118,9 +118,12 @@ void *barberFunc()
         {
             pthread_cond_wait(&BarberCond, &BarberMutex);
         }
+	//We're removing the client from queue
+	//And keeping him in a room with the barber
 	QueueElem *currentClient = removeClient(Clients);
         times = 100000 + (rand() / ((maxShearTime + 1)) * 10000);
         usleep(times);
+	//Client's hair has been cut - we can let him go
 	free(currentClient);
 	currentClientID = -1;
         // sprintf(str, "\nclient run %lld queue insert ", Clients->id);

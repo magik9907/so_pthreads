@@ -19,6 +19,7 @@ typedef struct Node QueueElem;
 
 QueueElem *Resigned = NULL;
 QueueElem *ResignedTop = NULL;
+int currentClientID = -1;
 QueueElem *Clients;
 QueueElem *ClientsTop;
 pthread_mutex_t waitingRoom;
@@ -32,7 +33,7 @@ pthread_t barber;
 
 int CLIENTCOUNT = 0;
 int RESIGNEDCOUNT = 0;
-//liczba miejsc w po+czekalni
+//liczba miejsc w poczekalni
 int clientQueue = 10;
 //liczba klientów
 int clientCount = 100;
@@ -67,7 +68,7 @@ void printDebug()
     free(str);
 }
 
-void removeClient(QueueElem *client)
+QueueElem *removeClient(QueueElem *client)
 {
     char *str = (char *)malloc(sizeof(char) * 100);
     // sprintf(str, "client try remove %d \n", client->id);
@@ -96,9 +97,14 @@ void removeClient(QueueElem *client)
         curr->next = NULL;
     }
     CLIENTCOUNT--;
+    currentClientID = client->id;
+    sprintf(str, "\nRes:%d WRoom: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, currentClientID);
+    write(1, str, strlen(str));
+    if(isDebug)
+	printDebug();
     pthread_mutex_unlock(&waitingRoom);
     free(str);
-    free(client);
+    return client;
 }
 
 void *barberFunc()
@@ -110,12 +116,13 @@ void *barberFunc()
     {
         sem_wait(&waitingClientSemaphore);
         sem_getvalue(&waitingClientSemaphore, &i);
+        QueueElem *currentClient = removeClient(Clients);
         times = 100000 + (rand() / ((maxShearTime + 1)) * 10000);
         usleep(times);
-
         // sprintf(str, "\nclient run %lld queue insert ", Clients->id);
         // write(1, str, strlen(str));
-        removeClient(Clients);
+        free(currentClient);
+	currentClientID = -1;
     }
     free(str);
     pthread_exit(NULL);
@@ -132,12 +139,14 @@ void *clientFunc(void *arg)
     // write(1, str, strlen(str));
     // int i;
     sem_post(&waitingClientSemaphore);
-    CLIENTCOUNT++;
-    sprintf(str, "\nRes:%d WRomm: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, Clients->id);
-    write(1, str, strlen(str));
-    if (isDebug == 1)
+    if(currentClientID != -1)
     {
-        printDebug();
+    	sprintf(str, "\nRes:%d WRoom: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, currentClientID);
+    	write(1, str, strlen(str));
+    	if (isDebug == 1)
+    	{
+            printDebug();
+    	}
     }
     pthread_mutex_unlock(&waitingRoom);
     free(str);
@@ -153,7 +162,7 @@ void addClient(int id)
     // sprintf(str, "newclient run %d  \n", newClient->id);
     // write(1, str, strlen(str));
     // pthread_mutex_init(&(newClient->mutex), NULL);
-
+    pthread_mutex_lock(&waitingRoom);
     if (CLIENTCOUNT >= 10)
     {
         if (Resigned == NULL)
@@ -164,7 +173,7 @@ void addClient(int id)
         }
         ResignedTop = newClient;
         RESIGNEDCOUNT++;
-        sprintf(str, "\nRes:%d WRomm: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, (Clients != NULL) ? Clients->id : 0);
+        sprintf(str, "\nRes:%d WRoom: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, currentClientID);
         write(1, str, strlen(str));
         if (isDebug == 1)
         {
@@ -174,8 +183,7 @@ void addClient(int id)
     }
     else
     {
-        write(1, str, strlen(str));
-        pthread_mutex_lock(&waitingRoom);
+    	CLIENTCOUNT++;
         if (ClientsTop == NULL)
         {
             Clients = newClient;
@@ -183,14 +191,20 @@ void addClient(int id)
         else
         {
             ClientsTop->next = newClient;
+            /*sprintf(str, "\nRes:%d WRoom: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, currentClientID);
+            write(1, str, strlen(str));
+            if (isDebug == 1)
+            {
+               printDebug();
+            }*/
         }
         ClientsTop = newClient;
-        pthread_mutex_unlock(&waitingRoom);
         if (pthread_create(&(newClient->thread), NULL, &clientFunc, (void *)newClient) != 0)
         {
             write(1, "create Thread client error\n", 31);
         }
     }
+    pthread_mutex_unlock(&waitingRoom);
     free(str);
 }
 
