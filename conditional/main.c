@@ -19,6 +19,7 @@ typedef struct Node QueueElem;
 
 QueueElem *Clients;
 QueueElem *ClientsTop;
+int currentClientID;
 QueueElem *Resigned = NULL;
 QueueElem *ResignedTop = NULL;
 pthread_mutex_t QueueMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -64,7 +65,7 @@ void printDebug()
     free(str);
 }
 
-void removeClient(QueueElem *client)
+QueueElem *removeClient(QueueElem *client)
 {
     pthread_mutex_lock(&QueueMutex);
     char *str = (char *)malloc(sizeof(char) * 100);
@@ -93,10 +94,14 @@ void removeClient(QueueElem *client)
         curr->next = NULL;
     }
     CLIENTCOUNT--;
-
-    pthread_mutex_unlock(&QueueMutex);
+    currentClientID = client->id;
+    sprintf(str, "\nRes:%d WRomm: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, currentClientID);
+    write(1, str, strlen(str));
+    if(isDebug)
+	printDebug();
     free(str);
-    free(client);
+    pthread_mutex_unlock(&QueueMutex);
+    return client;
 }
 
 void *barberFunc()
@@ -107,16 +112,18 @@ void *barberFunc()
     while (!allClients || Clients != NULL)
     {
         pthread_mutex_lock(&BarberMutex);
-        if (Clients == NULL)
+	//While instead of if
+	//Because the variable like to change by itself every now and then
+        while (Clients == NULL)
         {
             pthread_cond_wait(&BarberCond, &BarberMutex);
         }
+	QueueElem *currentClient = removeClient(Clients);
         times = 100000 + (rand() / ((maxShearTime + 1)) * 10000);
         usleep(times);
-
+	free(currentClient);
         // sprintf(str, "\nclient run %lld queue insert ", Clients->id);
         // write(1, str, strlen(str));
-        removeClient(Clients);
         pthread_mutex_unlock(&BarberMutex);
     }
     free(str);
@@ -133,7 +140,7 @@ void *clientFunc(void *arg)
     // write(1, str, strlen(str));
     // int i;
     CLIENTCOUNT++;
-    sprintf(str, "\nRes:%d WRomm: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, Clients->id);
+    sprintf(str, "\nRes:%d WRomm: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, currentClientID);
     write(1, str, strlen(str));
     if (isDebug == 1)
     {
@@ -144,7 +151,6 @@ void *clientFunc(void *arg)
     // sprintf(str, "add newClient %d\n", curr->id);
     //     write(1, str, strlen(str));
     pthread_mutex_unlock(&ClientMutex);
-
     free(str);
     pthread_exit(NULL);
 }
@@ -170,7 +176,7 @@ void addClient(int id)
         }
         ResignedTop = newClient;
         RESIGNEDCOUNT++;
-        sprintf(str, "\nRes:%d WRomm: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, (Clients != NULL) ? Clients->id : 0);
+        sprintf(str, "\nRes:%d WRomm: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, currentClientID);
         write(1, str, strlen(str));
         if (isDebug == 1)
         {
@@ -203,6 +209,7 @@ void addClient(int id)
 
 int main(int argc, char *argv[])
 {
+    currentClientID = -1;
     srand(time(NULL));
     int option;
     while ((option = getopt(argc, argv, "q:s:c:t:d")) != -1)
