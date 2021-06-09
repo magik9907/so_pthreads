@@ -57,20 +57,25 @@ int allClients = 0;
 //wypisywanie kolejek z trybei debugowania
 void printDebug()
 {
-    char *str = (char *)malloc(sizeof(char) * 300);
-    strcpy(str, "Clients: ");
+    
+    char *str = (char *)malloc(sizeof(char) * 30);
+    write(1, "Clients: ", 9);
     QueueElem *elem = Clients;
     while (elem != NULL)
     {
+        strcpy(str, "");
         sprintf(str, "%s -> %d", str, elem->id);
+        write(1, str, strlen(str));
         elem = elem->next;
     }
 
-    strcat(str, " Resigned clients: ");
+    write(1, " Resigned clients: ", strlen(" Resigned clients: "));
     elem = Resigned;
     while (elem != NULL)
     {
+        strcpy(str, "");
         sprintf(str, "%s -> %d", str, elem->id);
+        write(1, str, strlen(str));
         elem = elem->next;
     }
     write(1, str, strlen(str));
@@ -295,7 +300,7 @@ int main(int argc, char *argv[])
         next = curr->next;
         curr->next = NULL;
         free(curr);
-        curr =next;
+        curr = next;
     }
     curr = Resigned;
     next = NULL;
@@ -304,7 +309,7 @@ int main(int argc, char *argv[])
         next = curr->next;
         curr->next = NULL;
         free(curr);
-        curr=next;
+        curr = next;
     }
     return 0;
 }

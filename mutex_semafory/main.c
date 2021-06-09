@@ -8,71 +8,82 @@
 #include <string.h>
 #include <time.h>
 
+//struktura elementu kolejki
 struct Node
 {
     int id;
     pthread_t thread;
-    // pthread_mutex_t mutex;
     struct Node *next;
 };
 typedef struct Node QueueElem;
 
+// kolejka użytkowników którzy zrezygnowali
 QueueElem *Resigned = NULL;
+//wskaźnik na ostatni element kolejki
 QueueElem *ResignedTop = NULL;
 int currentClientID = -1;
+//Kolejka klientów w poczekalni
 QueueElem *Clients;
+//wskaźnik na ostatni element kolejki
 QueueElem *ClientsTop;
+//mutex poczekalni
 pthread_mutex_t waitingRoom;
+//mutex zajętego miejsca u fryzjera
 pthread_mutex_t barberSeat;
+//semfar wskazujący czy fryzjer jest zajety
 sem_t barberBusySemaphore;
-sem_t clientCountSemaphore;
+//licznik klientów w poczekalni
 sem_t waitingClientSemaphore;
-sem_t resignedClientsSemaphore;
 pthread_t *clients;
 pthread_t barber;
-
+//licznik klientow
 int CLIENTCOUNT = 0;
+//licznik klientów którzy zrezygnowali
 int RESIGNEDCOUNT = 0;
 //liczba miejsc w poczekalni
 int clientQueue = 10;
 //liczba klientów
 int clientCount = 100;
 //czas strzyzenia
-int maxShearTime = 9000000;
+int maxShearTime = 1500000;
 //czas przeybycia klientóœ
-int maxClientArriveTime = 1 * 1000000;
+int maxClientArriveTime = 1000000;
 //tryb debugowania
 int isDebug = 0;
-
+//liczba wszsytkich klientów
 int allClients = 0;
 
+//wypisywanie kolejek z trybei debugowania
 void printDebug()
 {
-      char *str = (char *)malloc(sizeof(char) * 300);
-    strcpy(str, "Clients: ");
+    char *str = (char *)malloc(sizeof(char) * 30);
+    write(1, "Clients: ", 9);
     QueueElem *elem = Clients;
     while (elem != NULL)
     {
+        strcpy(str, "");
         sprintf(str, "%s -> %d", str, elem->id);
+        write(1, str, strlen(str));
         elem = elem->next;
     }
 
-    strcat(str, " Resigned clients: ");
+    write(1, " Resigned clients: ", strlen(" Resigned clients: "));
     elem = Resigned;
     while (elem != NULL)
     {
+        strcpy(str, "");
         sprintf(str, "%s -> %d", str, elem->id);
+        write(1, str, strlen(str));
         elem = elem->next;
     }
     write(1, str, strlen(str));
     free(str);
 }
 
+//usowuanie klienta z kolejki Clients
 QueueElem *removeClient(QueueElem *client)
 {
     char *str = (char *)malloc(sizeof(char) * 100);
-    // sprintf(str, "client try remove %d \n", client->id);
-    // write(1, str, strlen(str));
     QueueElem *curr = Clients;
     pthread_mutex_lock(&waitingRoom);
 
@@ -100,13 +111,14 @@ QueueElem *removeClient(QueueElem *client)
     currentClientID = client->id;
     sprintf(str, "\nRes:%d WRoom: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, currentClientID);
     write(1, str, strlen(str));
-    if(isDebug)
-	printDebug();
+    if (isDebug)
+        printDebug();
     pthread_mutex_unlock(&waitingRoom);
     free(str);
     return client;
 }
 
+//funckja barbera, oczekiwanie na klienta, strzyżenie,
 void *barberFunc()
 {
     int i;
@@ -117,17 +129,16 @@ void *barberFunc()
         sem_wait(&waitingClientSemaphore);
         sem_getvalue(&waitingClientSemaphore, &i);
         QueueElem *currentClient = removeClient(Clients);
-        times = 100000 + (rand() / ((maxShearTime + 1)) * 10000);
+        times = 900000 + (rand() % (maxShearTime - 900000 + 1));
         usleep(times);
-        // sprintf(str, "\nclient run %lld queue insert ", Clients->id);
-        // write(1, str, strlen(str));
         free(currentClient);
-	currentClientID = -1;
+        currentClientID = -1;
     }
     free(str);
     pthread_exit(NULL);
 }
 
+//funckja klienta, obudzenie barbera (oczekiwanie na swoją kolej),
 void *clientFunc(void *arg)
 {
     QueueElem *curr = (QueueElem *)arg;
@@ -135,33 +146,28 @@ void *clientFunc(void *arg)
     pthread_mutex_lock(&waitingRoom);
 
     char *str = (char *)malloc(sizeof(char) * 100);
-    // sprintf(str, "add newClient %d\n", curr->id);
-    // write(1, str, strlen(str));
-    // int i;
     sem_post(&waitingClientSemaphore);
-    if(currentClientID != -1)
+    if (currentClientID != -1)
     {
-    	sprintf(str, "\nRes:%d WRoom: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, currentClientID);
-    	write(1, str, strlen(str));
-    	if (isDebug == 1)
-    	{
+        sprintf(str, "\nRes:%d WRoom: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, currentClientID);
+        write(1, str, strlen(str));
+        if (isDebug == 1)
+        {
             printDebug();
-    	}
+        }
     }
     pthread_mutex_unlock(&waitingRoom);
     free(str);
     pthread_exit(NULL);
 }
 
+//dodanie klienta lub jego rezygnacja
 void addClient(int id)
 {
     char *str = (char *)malloc(sizeof(char) * 100);
     QueueElem *newClient = (QueueElem *)malloc(sizeof(QueueElem));
     newClient->id = id;
     newClient->next = NULL;
-    // sprintf(str, "newclient run %d  \n", newClient->id);
-    // write(1, str, strlen(str));
-    // pthread_mutex_init(&(newClient->mutex), NULL);
     pthread_mutex_lock(&waitingRoom);
     if (CLIENTCOUNT >= 10)
     {
@@ -178,12 +184,11 @@ void addClient(int id)
         if (isDebug == 1)
         {
             printDebug();
-        } // write(1, "create Thread client error\n", 31);
-        // sem_post(&resignedClientsSemaphore);
+        }
     }
     else
     {
-    	CLIENTCOUNT++;
+        CLIENTCOUNT++;
         if (ClientsTop == NULL)
         {
             Clients = newClient;
@@ -191,12 +196,6 @@ void addClient(int id)
         else
         {
             ClientsTop->next = newClient;
-            /*sprintf(str, "\nRes:%d WRoom: %d/%d [in: %d]", RESIGNEDCOUNT, CLIENTCOUNT, clientQueue, currentClientID);
-            write(1, str, strlen(str));
-            if (isDebug == 1)
-            {
-               printDebug();
-            }*/
         }
         ClientsTop = newClient;
         if (pthread_create(&(newClient->thread), NULL, &clientFunc, (void *)newClient) != 0)
@@ -217,16 +216,36 @@ int main(int argc, char *argv[])
         switch (option)
         {
         case 'q':
-            clientQueue = atoi(optarg) + 1;
+            clientQueue = atoi(optarg);
+            if (clientQueue < 1)
+            {
+                write(1, "client queue size must be greater than 0", strlen("client queue size must be greater than 0"));
+                return -1;
+            }
             break;
         case 's':
             maxShearTime = atoi(optarg);
+            if (maxShearTime < 900000)
+            {
+                write(1, "max shear time must be greater than 900000", strlen("max shear time must be greater than 900000"));
+                return -1;
+            }
             break;
         case 'c':
             clientCount = atoi(optarg);
+            if (clientCount < 1)
+            {
+                write(1, "client count must be greater than 0", strlen("client count must be greater than 0"));
+                return -1;
+            }
             break;
         case 't':
-            maxClientArriveTime = atoi(optarg) * 1000000;
+            maxClientArriveTime = atoi(optarg);
+            if (maxClientArriveTime < 1000000)
+            {
+                write(1, "max client time arrival must be greater than 1000000", strlen("max client time arrival must be greater than 1000000"));
+                return -1;
+            }
             break;
         case 'd':
             isDebug = 1;
@@ -237,12 +256,9 @@ int main(int argc, char *argv[])
     //alokacja pamieci pthread
     clients = (pthread_t *)malloc(sizeof(pthread_t) * clientQueue);
     sem_init(&barberBusySemaphore, 0, 0);
-    sem_init(&clientCountSemaphore, 0, 0);
     sem_init(&waitingClientSemaphore, 0, 0);
-    sem_init(&resignedClientsSemaphore, 0, 0);
     pthread_mutex_init(&waitingRoom, NULL);
     pthread_mutex_init(&barberSeat, NULL);
-    // pthread_mutex_init(&barberSeat, NULL);
 
     if (pthread_create(&barber, NULL, &barberFunc, NULL) != 0)
     {
@@ -257,18 +273,30 @@ int main(int argc, char *argv[])
     int minClientTimeArrive = 100;
     for (i = 0; i < clientCount; i++)
     {
-        times = minClientTimeArrive + (rand() / ((maxClientArriveTime + 1)) * 1000);
+        times = minClientTimeArrive + (rand() % (maxClientArriveTime - minClientTimeArrive + 1));
         usleep(times);
         addClient(i);
     }
     allClients = 1;
     pthread_join(barber, NULL);
     sem_destroy(&barberBusySemaphore);
-    sem_destroy(&clientCountSemaphore);
-    free(clients);
+
+    QueueElem *curr = Clients, *next;
+    while (curr != NULL)
+    {
+        next = curr->next;
+        curr->next = NULL;
+        free(curr);
+        curr = next;
+    }
+    curr = Resigned;
+    next = NULL;
+    while (curr != NULL)
+    {
+        next = curr->next;
+        curr->next = NULL;
+        free(curr);
+        curr = next;
+    }
     return 0;
 }
-// char *str = (char *)malloc(sizeof(char) * 100);
-// sprintf(str, "client run %d queue insert \n", client->id);
-// write(1, str, strlen(str));
-// free(str);
