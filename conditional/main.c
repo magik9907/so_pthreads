@@ -57,7 +57,7 @@ int allClients = 0;
 //wypisywanie kolejek z trybei debugowania
 void printDebug()
 {
-    
+
     char *str = (char *)malloc(sizeof(char) * 30);
     write(1, "Clients: ", 9);
     QueueElem *elem = Clients;
@@ -66,9 +66,11 @@ void printDebug()
         strcpy(str, "");
         sprintf(str, "%s -> %d", str, elem->id);
         write(1, str, strlen(str));
+        strcpy(str, "");
         elem = elem->next;
     }
 
+    strcpy(str, "");
     write(1, " Resigned clients: ", strlen(" Resigned clients: "));
     elem = Resigned;
     while (elem != NULL)
@@ -78,7 +80,6 @@ void printDebug()
         write(1, str, strlen(str));
         elem = elem->next;
     }
-    write(1, str, strlen(str));
     free(str);
 }
 
